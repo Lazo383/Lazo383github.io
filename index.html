@@ -8,3 +8,279 @@
     <p>Aquí voy a poner mis cosas.</p>
   </body>
 </html>
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Simulador de Péndulo</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #0a0a1a;
+    font-family: 'Segoe UI', sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-height: 100vh;
+    padding: 20px;
+  }
+  h1 {
+    color: #fff;
+    font-size: 1.8em;
+    margin-bottom: 14px;
+    background: linear-gradient(90deg, #ff6ec7, #a78bfa, #60d9fa);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    font-weight: 800;
+    letter-spacing: 2px;
+  }
+  canvas {
+    border-radius: 20px;
+    background: radial-gradient(ellipse at center, #1a1a3e 0%, #0a0a1a 100%);
+    box-shadow: 0 0 40px #a78bfa55, 0 0 80px #ff6ec722;
+    border: 2px solid #a78bfa44;
+    max-width: 100%;
+  }
+  .controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 14px;
+    margin-top: 18px;
+    justify-content: center;
+    width: 100%;
+    max-width: 580px;
+  }
+  .control-group {
+    background: #1a1a3e;
+    border-radius: 14px;
+    padding: 12px 18px;
+    border: 1px solid #a78bfa44;
+    flex: 1;
+    min-width: 140px;
+  }
+  .control-group label {
+    color: #a78bfa;
+    font-size: 0.78em;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 6px;
+  }
+  .control-group label span { color: #60d9fa; }
+  input[type=range] {
+    width: 100%;
+    accent-color: #ff6ec7;
+    cursor: pointer;
+  }
+  .btns {
+    display: flex;
+    gap: 12px;
+    max-width: 580px;
+    width: 100%;
+    margin-top: 12px;
+  }
+  button {
+    flex: 1;
+    padding: 12px 0;
+    border: none;
+    border-radius: 12px;
+    font-weight: 800;
+    font-size: 1em;
+    cursor: pointer;
+    transition: transform 0.1s;
+    letter-spacing: 1px;
+  }
+  button:active { transform: scale(0.96); }
+  #btnPlay {
+    background: linear-gradient(135deg, #ff6ec7, #a78bfa);
+    color: #fff;
+    box-shadow: 0 4px 18px #ff6ec755;
+  }
+  #btnReset {
+    background: linear-gradient(135deg, #60d9fa, #a78bfa);
+    color: #0a0a1a;
+    box-shadow: 0 4px 18px #60d9fa44;
+  }
+  .info {
+    color: #ffffff44;
+    font-size: 0.75em;
+    margin-top: 10px;
+    text-align: center;
+  }
+</style>
+</head>
+<body>
+
+<h1>⚙️ SIMULADOR DE PÉNDULO</h1>
+<canvas id="c" width="580" height="360"></canvas>
+
+<div class="controls">
+  <div class="control-group">
+    <label>Longitud <span id="vLen">180</span></label>
+    <input type="range" id="sLen" min="60" max="270" value="180">
+  </div>
+  <div class="control-group">
+    <label>Gravedad <span id="vGrav">9.8</span></label>
+    <input type="range" id="sGrav" min="10" max="250" value="98">
+  </div>
+  <div class="control-group">
+    <label>Ángulo inicial <span id="vAngle">45°</span></label>
+    <input type="range" id="sAngle" min="5" max="85" value="45">
+  </div>
+  <div class="control-group">
+    <label>Fricción <span id="vFric">0.995</span></label>
+    <input type="range" id="sFric" min="980" max="1000" value="995">
+  </div>
+</div>
+
+<div class="btns">
+  <button id="btnPlay">⏸ PAUSAR</button>
+  <button id="btnReset">🔄 REINICIAR</button>
+</div>
+<div class="info">Arrastra la bola con el mouse para soltarla desde cualquier ángulo</div>
+
+<script>
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+const W = canvas.width, H = canvas.height;
+const pivot = { x: W/2, y: 70 };
+
+let length = 180, gravity = 9.8, friction = 0.995;
+let angle = Math.PI/4, angleVel = 0;
+let running = true, dragging = false;
+let trail = [], hue = 0;
+
+const sLen   = document.getElementById('sLen');
+const sGrav  = document.getElementById('sGrav');
+const sAngle = document.getElementById('sAngle');
+const sFric  = document.getElementById('sFric');
+
+sLen.addEventListener('input', () => { length = +sLen.value; document.getElementById('vLen').textContent = length; reset(); });
+sGrav.addEventListener('input', () => { gravity = +sGrav.value/10; document.getElementById('vGrav').textContent = gravity.toFixed(1); });
+sAngle.addEventListener('input', () => { document.getElementById('vAngle').textContent = sAngle.value+'°'; reset(); });
+sFric.addEventListener('input', () => { friction = +sFric.value/1000; document.getElementById('vFric').textContent = friction.toFixed(3); });
+
+function reset() {
+  angle = (+sAngle.value) * Math.PI / 180;
+  angleVel = 0;
+  trail = [];
+}
+
+document.getElementById('btnPlay').addEventListener('click', () => {
+  running = !running;
+  document.getElementById('btnPlay').textContent = running ? '⏸ PAUSAR' : '▶ REANUDAR';
+  if (running) requestAnimationFrame(loop);
+});
+document.getElementById('btnReset').addEventListener('click', reset);
+
+function getBob() {
+  return { x: pivot.x + Math.sin(angle)*length, y: pivot.y + Math.cos(angle)*length };
+}
+
+// Mouse
+canvas.addEventListener('mousedown', e => {
+  const r = canvas.getBoundingClientRect();
+  const b = getBob();
+  if (Math.hypot(e.clientX-r.left-b.x, e.clientY-r.top-b.y) < 28) { dragging=true; angleVel=0; trail=[]; }
+});
+canvas.addEventListener('mousemove', e => {
+  if (!dragging) return;
+  const r = canvas.getBoundingClientRect();
+  angle = Math.atan2(e.clientX-r.left-pivot.x, e.clientY-r.top-pivot.y);
+});
+canvas.addEventListener('mouseup', ()=>{ dragging=false; });
+canvas.addEventListener('mouseleave', ()=>{ dragging=false; });
+
+// Touch
+canvas.addEventListener('touchstart', e=>{ e.preventDefault(); const t=e.touches[0],r=canvas.getBoundingClientRect(),b=getBob(); if(Math.hypot(t.clientX-r.left-b.x,t.clientY-r.top-b.y)<36){dragging=true;angleVel=0;trail=[];} },{passive:false});
+canvas.addEventListener('touchmove', e=>{ e.preventDefault(); if(!dragging)return; const t=e.touches[0],r=canvas.getBoundingClientRect(); angle=Math.atan2(t.clientX-r.left-pivot.x,t.clientY-r.top-pivot.y); },{passive:false});
+canvas.addEventListener('touchend', ()=>{ dragging=false; });
+
+function glow(x, y, r, color, blur) {
+  ctx.save();
+  ctx.shadowColor = color; ctx.shadowBlur = blur;
+  ctx.fillStyle = color;
+  ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2); ctx.fill();
+  ctx.restore();
+}
+
+function loop() {
+  if (!dragging && running) {
+    const acc = -(gravity/100) / (length/100) * Math.sin(angle);
+    angleVel += acc;
+    angleVel *= friction;
+    angle += angleVel;
+  }
+
+  hue = (hue + 1.2) % 360;
+  const bob = getBob();
+  trail.push({x: bob.x, y: bob.y, hue});
+  if (trail.length > 90) trail.shift();
+
+  ctx.clearRect(0, 0, W, H);
+
+  // Grid
+  ctx.strokeStyle = '#ffffff07';
+  ctx.lineWidth = 1;
+  for (let x=0;x<W;x+=40){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();}
+  for (let y=0;y<H;y+=40){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}
+
+  // Trail
+  for (let i=1;i<trail.length;i++) {
+    const a = i/trail.length;
+    ctx.strokeStyle = `hsla(${trail[i].hue},100%,65%,${a*0.65})`;
+    ctx.lineWidth = a*4;
+    ctx.beginPath();
+    ctx.moveTo(trail[i-1].x, trail[i-1].y);
+    ctx.lineTo(trail[i].x, trail[i].y);
+    ctx.stroke();
+  }
+
+  // Rod
+  const rg = ctx.createLinearGradient(pivot.x,pivot.y,bob.x,bob.y);
+  rg.addColorStop(0,'#a78bfa');
+  rg.addColorStop(1,`hsl(${hue},100%,65%)`);
+  ctx.strokeStyle = rg; ctx.lineWidth = 3;
+  ctx.shadowColor='#a78bfa'; ctx.shadowBlur=12;
+  ctx.beginPath(); ctx.moveTo(pivot.x,pivot.y); ctx.lineTo(bob.x,bob.y); ctx.stroke();
+  ctx.shadowBlur=0;
+
+  // Pivot
+  glow(pivot.x, pivot.y, 10, '#a78bfa', 22);
+  ctx.fillStyle='#fff'; ctx.beginPath(); ctx.arc(pivot.x,pivot.y,5,0,Math.PI*2); ctx.fill();
+
+  // Bob glow
+  const bc = `hsl(${hue},100%,60%)`;
+  glow(bob.x, bob.y, 24, bc, 40);
+  const bg2 = ctx.createRadialGradient(bob.x-6,bob.y-6,2,bob.x,bob.y,19);
+  bg2.addColorStop(0,'#fff');
+  bg2.addColorStop(0.4,bc);
+  bg2.addColorStop(1,`hsl(${(hue+40)%360},100%,28%)`);
+  ctx.fillStyle=bg2;
+  ctx.beginPath(); ctx.arc(bob.x,bob.y,19,0,Math.PI*2); ctx.fill();
+
+  // Info panel
+  const speed = Math.abs(angleVel*length).toFixed(1);
+  const deg = (angle*180/Math.PI).toFixed(1);
+  const period = (2*Math.PI*Math.sqrt((length/100)/gravity)).toFixed(2);
+
+  ctx.fillStyle='#ffffff18';
+  ctx.beginPath();
+  if (ctx.roundRect) ctx.roundRect(10,10,168,82,10); else ctx.rect(10,10,168,82);
+  ctx.fill();
+  ctx.fillStyle='#fff'; ctx.font='bold 13px Segoe UI';
+  ctx.fillText(`📐 Ángulo: ${deg}°`, 20, 34);
+  ctx.fillText(`⚡ Velocidad: ${speed}`, 20, 56);
+  ctx.fillText(`⏱ Período: ${period}s`, 20, 78);
+
+  if (running || dragging) requestAnimationFrame(loop);
+}
+
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
